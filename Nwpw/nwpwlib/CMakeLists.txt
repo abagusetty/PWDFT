@@ -1,7 +1,5 @@
 
 # files in the nwpwlib library
-file(GLOB_RECURSE src_blas      blas/*.f)
-file(GLOB_RECURSE src_lapack    lapack/*.f)
 file(GLOB_RECURSE src_fftpack   fftpack/*.f)
 file(GLOB_RECURSE src_Control   Control/*.hpp Control/*.cpp Control/*.h Control/*.c)
 file(GLOB_RECURSE src_Parallel  Parallel/*.hpp Parallel/*.cpp)
@@ -23,7 +21,6 @@ add_subdirectory(parse)
 add_subdirectory(psp_library)
 add_subdirectory(pseudopotential)
 add_subdirectory(pseudopotential/paw_atom)
-#add_subdirectory(blas)
 add_subdirectory(fftpack)
 add_subdirectory(Control)
 add_subdirectory(Parallel)
