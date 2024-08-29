@@ -84,7 +84,7 @@ These timings suggest that parallel FFTs should be implemented using hybrid MPI-
 
 # Compiling and Running Instructions
 
-## Build instructions on Sunspot
+## Build instructions on Sunspot/Aurora
 
 ### Required Modules
 
@@ -93,51 +93,6 @@ module purge
 module restore
 module load cmake
 ```
-#### old
-```
-module purge
-module load spack cmake
-module load oneapi/eng-compiler/.2023.12.15.002
-module load cray-libpals/1.2.12 cray-pals/1.2.12
-```
-#### older
-```
-module purge
-module use /soft/modulefiles
-module load oneapi/eng-compiler/2023.12.15.002
-module load spack-pe-gcc/0.5-rc2
-module load cmake thapi
-module load cray-pals/1.3.3
-module load cray-libpals/1.3.3
-```
-
-#### olderer 
-```
-module purge
-module restore
-module load cray-libpals/1.2.12 cray-pals/1.2.12 append-deps/default prepend-deps/default libfabric/1.15.2.0
-module load oneapi/eng-compiler/2023.05.15.003
-module load intel_compute_runtime/release/agama-devel-627
-module load mpich/52.2/icc-all-pmix-gpu
-module load spack cmake
-```
-
-### OLD MODULES
-```
-module add gcc/11.2.0
-module add cray-libpals/1.2.3
-module add intel_compute_runtime/release/pvc-prq-66
-module add oneapi-prgenv/2022.10.15.006.001
-module add mpich/50.1/icc-all-pmix-gpu
-module add spack/linux-sles15-x86_64-ldpath
-module add oneapi/eng-compiler/2022.10.15.006
-module add ncurses/6.1.20180317-gcc-11.2.0-zedoshf
-module add libfabric/1.15.2.0
-module add openssl/1.1.1d-gcc-11.2.0-amlvxob
-module add cray-pals/1.2.3
-module add cmake/3.24.2-gcc-11.2.0-pcasswq
-```
-
 
 ### Getting the code and building instructions
 
@@ -150,18 +105,11 @@ git config --global http.proxy http://proxy.alcf.anl.gov:3128
 git clone https://github.com/ebylaska/PWDFT.git
 
 cd PWDFT
-cmake -H. -Bbuild_sycl -DNWPW_SYCL=On -DCMAKE_CXX_COMPILER=dpcpp ./Nwpw
-or
-cmake -H. -Bbuild_sycl -DNWPW_SYCL=On -DCMAKE_CXX_COMPILER=icpx -DCMAKE_CXX_FLAGS="-fsycl" ./Nwpw
+cmake -H. -Bbuild_sycl -DNWPW_SYCL=On -DCMAKE_C_COMPILER=icx -DCMAKE_Fortran_COMPILER=ifx -DCMAKE_CXX_COMPILER=icpx -DCMAKE_CXX_FLAGS="-fsycl" ./Nwpw
 
 cd build_sycl
 make
 ```
-```
-cd PWDFT/build_sycl
-cmake -DNWPW_SYCL=On -DCMAKE_CXX_COMPILER=dpcpp ../Nwpw
-```
-
 
 ### Running
 ```
