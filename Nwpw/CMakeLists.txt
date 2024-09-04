@@ -20,7 +20,7 @@ enable_language(Fortran)
 include(CheckFortranCompilerFlag)
 
 #set default CMAKE_BUILD_TYPE
-set(CMAKE_BUILD_TYPE release)
+set(CMAKE_BUILD_TYPE Release)
 
 #set(CMAKE_CXX_FLAGS "-Wall -Wextra")
 #set(CMAKE_CXX_FLAGS_DEBUG "-g")
@@ -65,11 +65,12 @@ if (NWPW_SYCL)
   unset(CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD 17)
 
-  add_definitions(-DNWPW_SYCL=1)
-  SET(SYCL_CXX_COMPILE_FLAGS "-fsycl -fsycl-device-code-split=per_kernel -sycl-std=2020 -Wsycl-strict -fsycl-targets=spir64_gen -Xsycl-target-backend \'-device 12.60.7'")
+  add_definitions(-DNWPW_SYCL)
+  SET(SYCL_CXX_COMPILE_FLAGS "-fsycl -fsycl-device-code-split=per_kernel -sycl-std=2020 -Wsycl-strict -fsycl-targets=intel_gpu_pvc")
   SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${SYCL_CXX_COMPILE_FLAGS}")
 
-  include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/FindMKL.cmake)
+  find_package(MKL CONFIG REQUIRED PATHS $ENV{MKLROOT})
+  set(MKL_FOUND True)
 
   if( NWPW_SYCL_ENABLE_PROFILE )
     add_definitions(-DNWPW_SYCL_ENABLE_PROFILE=1)
@@ -128,12 +129,6 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel" OR ${CMAKE_Fortran_COMPILER_ID}
   #set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS} -O3 -m64")
   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS} -O3")
   set(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS} -O3 -xhost" CACHE STRING "" FORCE)
-
-  #list(APPEND CMAKE_MODULE_PATH "$ENV{MKLROOT}/lib/cmake/mkl")
-  set(MKL_DIR "$ENV{MKLROOT}/lib/cmake/mkl")
-  find_package(MKL REQUIRED)
-  include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/FindMKL.cmake)
-  include_directories(${MKL_INCLUDE_DIRS})
 elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU")
    message("-- Using ${CMAKE_Fortran_COMPILER_ID} Fortran Compiler ")
    # adding "-m64 -fdefault-integer-8" below won't work
@@ -152,41 +147,31 @@ endif()
 
 #Configure OpenCl
 if(NWPW_OPENCL)
-find_package(OpenCL)
-if(OpenCL_FOUND)
-   message("-- Using OpenCL libs")
-   add_definitions(-DNWPW_OPENCL=1)
-   include_directories(${OpenCL_INCLUDE_DIRS})
-   link_directories(${OpenCL_LIBRARY})
-endif(OpenCL_FOUND)
+  find_package(OpenCL)
+  if(OpenCL_FOUND)
+    message("-- Using OpenCL libs")
+    add_definitions(-DNWPW_OPENCL=1)
+    include_directories(${OpenCL_INCLUDE_DIRS})
+    link_directories(${OpenCL_LIBRARY})
+  endif(OpenCL_FOUND)
 endif(NWPW_OPENCL)
 
 
 #Configure OpenMP
 if(NWPW_OPENMP)
-find_package(OpenMP)
-if(OPENMP_FOUND)
-   message("-- Using OpenMP")
+  find_package(OpenMP)
+  if(OPENMP_FOUND)
+    message("-- Using OpenMP")
     set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
     set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
-endif(OPENMP_FOUND)
+  endif(OPENMP_FOUND)
 endif(NWPW_OPENMP)
 
 #Configure MPI
 #find_package(MPI)
 find_package(MPI REQUIRED C CXX)
 include_directories(${MPI_INCLUDE_PATH})
-
-
-if(MKL_FOUND)
-   if(NWPW_SYCL)
-      message("-- Using oneMKL libs")
-      include_directories(${MKL_INCLUDE_DIRS})
-   endif(NWPW_SYCL)
-else()
-   message("-- Using internal blas and lapack libs")
-endif()
 
 
 # configure a header file to pass the version number only
@@ -222,6 +207,9 @@ elseif(NWPW_CUDA)
 elseif(NWPW_HIP)
    target_include_directories(pwdft PUBLIC ${ROCBLAS_INCLUDE_DIRS} ${ROCFFT_INCLUDE_DIRS} ${ROCSOLVER_INCLUDE_DIRS})  
    target_link_libraries(pwdft band pspw file nwpwlib ${MPI_LIBRARIES} hip::device)
+elseif(NWPW_SYCL)
+   target_include_directories(pwdft PUBLIC $ENV{MKLROOT}/include)
+   target_link_libraries(pwdft band pspw file nwpwlib ${MPI_LIBRARIES} MKL::MKL_SYCL)
 else()
    target_link_libraries(pwdft band pspw file nwpwlib ${MPI_LIBRARIES})
 endif()

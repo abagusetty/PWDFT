@@ -14,8 +14,8 @@
 #endif
 
 
-#include        <complex>
-#include <cstring>   //memset()
+#include <complex>
+#include <cstring> //memset()
 #include <stdexcept> // runtime_error()
 
 #include <iostream> 
