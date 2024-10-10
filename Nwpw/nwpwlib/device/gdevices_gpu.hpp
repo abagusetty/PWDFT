@@ -1,4 +1,4 @@
-// NWPW_CUDA Routines
+// NWPW_GPU Routines
 
 #pragma once
 
@@ -9,12 +9,6 @@
 #define DEBUG_IO  false
 
 //#include        "gdevice.hpp"
-
-#include <gpublas_v2.h>
-#include <cuda_runtime.h>
-#include <cufft.h>
-#include <cusolverDn.h>
-//#include "cusolver_utils.h"
 
 #include <iostream>
 #include <sstream>
@@ -28,10 +22,6 @@
 #include <stdexcept>
 #include <string>
 
-#include <cuComplex.h>
-#include <gpublas_api.h>
-#include <cuda_runtime_api.h>
-#include <cusolverDn.h>
 #include <library_types.h>
 
 #include <complex>
@@ -42,123 +32,6 @@
 #ifndef cusolver_int_t
 #define cusolver_int_t int
 #endif
-
-// cusolver API error checking
-#define CUSOLVER_CHECK(err)                                                    \
-  do {                                                                         \
-    cusolverStatus_t err_ = (err);                                             \
-    if (err_ != CUSOLVER_STATUS_SUCCESS) {                                     \
-      printf("cusolver error %d at %s:%d\n", err_, __FILE__, __LINE__);        \
-      throw std::runtime_error("cusolver error");                              \
-    }                                                                          \
-  } while (0)
-
-class cuda_exception : public std::exception {
-
-  std::string file_;
-  int line_;
-  cudaError_t err_code_;
-
-  const char *what() const noexcept override {
-    std::stringstream ss;
-    ss << "CUDA Exception, " << cudaGetErrorString(err_code_) << " at "
-       << std::endl
-       << file_ << " : " << line_ << std::endl;
-    auto msg = ss.str();
-    return strdup(msg.c_str());
-  }
-
-public:
-  cuda_exception(std::string file, int line, cudaError_t err)
-      : file_(file), line_(line), err_code_(err) {}
-};
-
-class cufft_exception : public std::exception {
-
-  std::string file_;
-  int line_;
-  cufftResult err_code_;
-
-  static const char *_cudaGetErrorEnum(cufftResult error) {
-    switch (error) {
-    case CUFFT_SUCCESS:
-      return "CUFFT_SUCCESS";
-
-    case CUFFT_INVALID_PLAN:
-      return "CUFFT_INVALID_PLAN";
-
-    case CUFFT_ALLOC_FAILED:
-      return "CUFFT_ALLOC_FAILED";
-
-    case CUFFT_INVALID_TYPE:
-      return "CUFFT_INVALID_TYPE";
-
-    case CUFFT_INVALID_VALUE:
-      return "CUFFT_INVALID_VALUE";
-
-    case CUFFT_INTERNAL_ERROR:
-      return "CUFFT_INTERNAL_ERROR";
-
-    case CUFFT_EXEC_FAILED:
-      return "CUFFT_EXEC_FAILED";
-
-    case CUFFT_SETUP_FAILED:
-      return "CUFFT_SETUP_FAILED";
-
-    case CUFFT_INVALID_SIZE:
-      return "CUFFT_INVALID_SIZE";
-
-    case CUFFT_UNALIGNED_DATA:
-      return "CUFFT_UNALIGNED_DATA";
-    }
-    return "<unknown>";
-  }
-
-  const char *what() const noexcept override {
-    std::stringstream ss;
-    ss << "CUFFT Exception, "
-       << " Error Code: " << _cudaGetErrorEnum(err_code_) << std::endl
-       << " at " << file_ << " : " << line_ << std::endl;
-    auto msg = ss.str();
-    return strdup(msg.c_str());
-  }
-
-public:
-  cufft_exception(std::string file, int line, cufftResult err)
-      : file_(file), line_(line), err_code_(err) {}
-};
-
-class gpublas_exception : public std::exception {
-
-  std::string file_;
-  int line_;
-  gpublasStatus_t err_code_;
-
-  const char *what() const noexcept override {
-    std::stringstream ss;
-    ss << "GPUBLAS Exception, "
-       << " Error Code: " << gpublasGetStatusString(err_code_) << std::endl
-       << " at " << file_ << " : " << line_ << std::endl;
-    auto msg = ss.str();
-    return strdup(msg.c_str());
-  }
-
-public:
-  gpublas_exception(std::string file, int line, gpublasStatus_t err)
-      : file_(file), line_(line), err_code_(err) {}
-};
-
-#define NWPW_GPU_ERROR(ERR)                                                   \
-  if (ERR != cudaSuccess)                                                      \
-    throw cuda_exception(__FILE__, __LINE__, ERR);
-
-#define NWPW_CUFFT_ERROR(ERR)                                                  \
-  if (ERR != CUFFT_SUCCESS)                                                    \
-    throw cufft_exception(__FILE__, __LINE__, ERR);
-
-#define NWPW_GPUBLAS_ERROR(ERR)                                                 \
-  if (ERR != GPUBLAS_STATUS_SUCCESS)                                            \
-    throw gpublas_exception(__FILE__, __LINE__, ERR);
 
 /* Gdevices (CUDA) object -
 
@@ -208,16 +81,16 @@ class Gdevices {
    gpublasOperation_t matT = GPUBLAS_OP_T;
    gpublasOperation_t matN = GPUBLAS_OP_N;
 
-   cusolverEigMode_t jobz =
-       CUSOLVER_EIG_MODE_VECTOR; // compute eigenvalues and eigenvectors.
+   gpusolverEigMode_t jobz =
+       GPUSOLVER_EIG_MODE_VECTOR; // compute eigenvalues and eigenvectors.
    gpublasFillMode_t uplo = GPUBLAS_FILL_MODE_LOWER;
-   cusolverDnHandle_t cusolverH = NULL;
+   gpusolverDnHandle_t gpusolverH = NULL;
    gpuStream_t solverstream = NULL;
 
    gpuStream_t stream[12];
 
 public:
-   int  typegpu= 1;
+   int typegpu = 1;
    bool hasgpu = true;
 
    /* device memory */
@@ -261,10 +134,10 @@ public:
      for (auto i=0; i<12; ++i)
        NWPW_GPU_ERROR(gpuStreamCreate(&stream[i]));
 
-     // create cusolver handle, bind a stream
-     CUSOLVER_CHECK(cusolverDnCreate(&cusolverH));
-     NWPW_GPU_ERROR( gpuStreamCreateWithFlags(&solverstream, gpuStreamNonBlocking));
-     CUSOLVER_CHECK(cusolverDnSetStream(cusolverH, solverstream));
+     // create gpusolver handle, bind a stream
+     gpusolverDnCreate(&gpusolverH);
+     NWPW_GPU_ERROR(gpuStreamCreateWithFlags(&solverstream, gpuStreamNonBlocking));
+     gpusolverDnSetStream(gpusolverH, solverstream);
 
      // query working space of syevd
      for (int i=0; i<2; ++i)
@@ -317,6 +190,9 @@ public:
       // cufftDestroy(backward_plan_x);
    }
 
+  gpublasHandle_t& get_handle() {
+    return master_handle;
+  }
    /**************************************
     *                                    *
     *           fetch_dev_mem_indx       *
@@ -338,7 +214,7 @@ public:
          ii = ndev_mem;
          inuse[ii] = true;
          ndsize_mem[ii] = ndsize;
-         NWPW_GPU_ERROR(cudaMalloc((void **)&(dev_mem[ii]), ndsize * sizeof(double)));
+         NWPW_GPU_ERROR(gpuMalloc((void **)&(dev_mem[ii]), ndsize * sizeof(double)));
          ndev_mem += 1;
          if (ndev_mem>NDEV_MAX) std::cout << "ERROR: ndev_mem > NDEV_MAX" << std::endl;
       }
@@ -370,7 +246,7 @@ public:
          ii = ndev_mem_large;
          inuse_large[ii] = true;
          ndsize_mem_large[ii] = ndsize;
-         NWPW_GPU_ERROR(cudaMalloc((void **)&(dev_mem_large[ii]), ndsize * sizeof(double)));
+         NWPW_GPU_ERROR(gpuMalloc((void **)&(dev_mem_large[ii]), ndsize * sizeof(double)));
          ndev_mem_large += 1;
          if (ndev_mem>NDEV_MAX_LARGE) std::cout << "ERROR: ndev_mem > NDEV_MAX_LARGE" << std::endl;
       }
@@ -1014,11 +890,11 @@ public:
 
       NWPW_GPU_ERROR(gpuStreamSynchronize(stream[0]));
       NWPW_GPUBLAS_ERROR(gpublasZgemm(master_handle,matN,matN,npack,ne,ne,
-                                    reinterpret_cast<const cuDoubleComplex*>(alpha),
-                                    reinterpret_cast<const cuDoubleComplex*>(dev_mem[ia]),npack1_max,
-                                    reinterpret_cast<const cuDoubleComplex*>(dev_mem[ib]),ne,
-                                    reinterpret_cast<const cuDoubleComplex*>(beta),
-                                    reinterpret_cast<cuDoubleComplex*>(dev_mem[ic]),npack1_max));
+                                    reinterpret_cast<const gpuDoubleComplex*>(alpha),
+                                    reinterpret_cast<const gpuDoubleComplex*>(dev_mem[ia]),npack1_max,
+                                    reinterpret_cast<const gpuDoubleComplex*>(dev_mem[ib]),ne,
+                                    reinterpret_cast<const gpuDoubleComplex*>(beta),
+                                    reinterpret_cast<gpuDoubleComplex*>(dev_mem[ic]),npack1_max));
       NWPW_GPUBLAS_ERROR(gpublasGetMatrixAsync(2*npack1_max,ne,sizeof(double),dev_mem[ic],2*npack1_max,host_c,2*npack1_max,stream[0]));
       NWPW_GPU_ERROR(gpuStreamSynchronize(stream[0]));
 
@@ -1052,11 +928,11 @@ public:
 
       NWPW_GPU_ERROR(gpuStreamSynchronize(stream[0]));
       NWPW_GPUBLAS_ERROR(gpublasZgemm(master_handle,matC,matN,ne,ne,npack,
-                                    reinterpret_cast<const cuDoubleComplex*>(alpha),
-                                    reinterpret_cast<const cuDoubleComplex*>(dev_mem[ia]),npack1_max,
-                                    reinterpret_cast<const cuDoubleComplex*>(dev_mem[ib]),npack1_max,
-                                    reinterpret_cast<const cuDoubleComplex*>(beta),
-                                    reinterpret_cast<cuDoubleComplex*>(dev_mem[ic]),ne));
+                                    reinterpret_cast<const gpuDoubleComplex*>(alpha),
+                                    reinterpret_cast<const gpuDoubleComplex*>(dev_mem[ia]),npack1_max,
+                                    reinterpret_cast<const gpuDoubleComplex*>(dev_mem[ib]),npack1_max,
+                                    reinterpret_cast<const gpuDoubleComplex*>(beta),
+                                    reinterpret_cast<gpuDoubleComplex*>(dev_mem[ic]),ne));
       NWPW_GPUBLAS_ERROR(gpublasGetMatrixAsync(2*ne,ne,sizeof(double),dev_mem[ic],2*ne,host_c,2*ne,stream[0]));
       NWPW_GPU_ERROR(gpuStreamSynchronize(stream[0]));
 
@@ -1089,11 +965,11 @@ public:
 
       NWPW_GPU_ERROR(gpuStreamSynchronize(stream[0]));
       NWPW_GPUBLAS_ERROR(gpublasZgemm(master_handle,matC,matN,ne,nprj,npack,
-                                    reinterpret_cast<const cuDoubleComplex*>(alpha),
-                                    reinterpret_cast<const cuDoubleComplex*>(dev_mem[ia]),npack1_max,
-                                    reinterpret_cast<const cuDoubleComplex*>(dev_mem[ib]),npack1_max,
-                                    reinterpret_cast<const cuDoubleComplex*>(beta),
-                                    reinterpret_cast<cuDoubleComplex*>(dev_mem[ic]),ne));
+                                    reinterpret_cast<const gpuDoubleComplex*>(alpha),
+                                    reinterpret_cast<const gpuDoubleComplex*>(dev_mem[ia]),npack1_max,
+                                    reinterpret_cast<const gpuDoubleComplex*>(dev_mem[ib]),npack1_max,
+                                    reinterpret_cast<const gpuDoubleComplex*>(beta),
+                                    reinterpret_cast<gpuDoubleComplex*>(dev_mem[ic]),ne));
       NWPW_GPUBLAS_ERROR(gpublasGetMatrixAsync(2*ne,nprj,sizeof(double),dev_mem[ic],2*ne,host_c,2*ne,stream[0]));
       NWPW_GPU_ERROR(gpuStreamSynchronize(stream[0]));
 
@@ -1135,11 +1011,11 @@ public:
          }
          NWPW_GPU_ERROR(gpuStreamSynchronize(stream[tt % 2]));
          NWPW_GPUBLAS_ERROR(gpublasZgemm(master_handle,matC,matN,ne,nprj,tile_npack1[tt],
-                                       reinterpret_cast<const cuDoubleComplex*>(alpha),
-                                       reinterpret_cast<const cuDoubleComplex*>(dev_mem[ia_psi[tt%2]]),tile_npack1[tt],
-                                       reinterpret_cast<const cuDoubleComplex*>(dev_mem[ib_prj[tt%2]]),tile_npack1[tt],
-                                       reinterpret_cast<const cuDoubleComplex*>(beta0),
-                                       reinterpret_cast<cuDoubleComplex*>(dev_mem[ic]),ne));
+                                       reinterpret_cast<const gpuDoubleComplex*>(alpha),
+                                       reinterpret_cast<const gpuDoubleComplex*>(dev_mem[ia_psi[tt%2]]),tile_npack1[tt],
+                                       reinterpret_cast<const gpuDoubleComplex*>(dev_mem[ib_prj[tt%2]]),tile_npack1[tt],
+                                       reinterpret_cast<const gpuDoubleComplex*>(beta0),
+                                       reinterpret_cast<gpuDoubleComplex*>(dev_mem[ic]),ne));
 
          //NWPW_GPUBLAS_ERROR(gpublasDgemm(master_handle, matT, matN, ne, nprj, tile_npack2[tt], &alpha,
          //                              dev_mem[ia_psi[tt % 2]], tile_npack2[tt],
@@ -1179,11 +1055,11 @@ public:
 
       NWPW_GPU_ERROR(gpuStreamSynchronize(stream[0]));
       NWPW_GPUBLAS_ERROR(gpublasZgemm(master_handle,matN,matC,npack,ne,nprj,
-                                    reinterpret_cast<const cuDoubleComplex*>(alpha),
-                                    reinterpret_cast<const cuDoubleComplex*>(dev_mem[ia]),npack1_max,
-                                    reinterpret_cast<const cuDoubleComplex*>(dev_mem[ib]),ne,
-                                    reinterpret_cast<const cuDoubleComplex*>(beta),
-                                    reinterpret_cast<cuDoubleComplex*>(dev_mem[ic]),npack1_max));
+                                    reinterpret_cast<const gpuDoubleComplex*>(alpha),
+                                    reinterpret_cast<const gpuDoubleComplex*>(dev_mem[ia]),npack1_max,
+                                    reinterpret_cast<const gpuDoubleComplex*>(dev_mem[ib]),ne,
+                                    reinterpret_cast<const gpuDoubleComplex*>(beta),
+                                    reinterpret_cast<gpuDoubleComplex*>(dev_mem[ic]),npack1_max));
       NWPW_GPUBLAS_ERROR(gpublasGetMatrixAsync(2*npack1_max,ne,sizeof(double),dev_mem[ic],2*npack1_max,host_c,2*npack1_max,stream[0]));
       NWPW_GPU_ERROR(gpuStreamSynchronize(stream[0]));
 
@@ -1225,11 +1101,11 @@ public:
          NWPW_GPU_ERROR(gpuStreamSynchronize(stream[tt%2]));
 
          NWPW_GPUBLAS_ERROR(gpublasZgemm(master_handle,matN,matC,tile_npack1[tt],ne,nprj,
-                                    reinterpret_cast<const cuDoubleComplex*>(alpha),
-                                    reinterpret_cast<const cuDoubleComplex*>(dev_mem[ib_prj[tt%2]]),tile_npack1[tt],
-                                    reinterpret_cast<const cuDoubleComplex*>(dev_mem[ib]),ne,
-                                    reinterpret_cast<const cuDoubleComplex*>(beta),
-                                    reinterpret_cast<cuDoubleComplex*>(dev_mem[ia_hpsi[tt]]),tile_npack1[tt]));
+                                    reinterpret_cast<const gpuDoubleComplex*>(alpha),
+                                    reinterpret_cast<const gpuDoubleComplex*>(dev_mem[ib_prj[tt%2]]),tile_npack1[tt],
+                                    reinterpret_cast<const gpuDoubleComplex*>(dev_mem[ib]),ne,
+                                    reinterpret_cast<const gpuDoubleComplex*>(beta),
+                                    reinterpret_cast<gpuDoubleComplex*>(dev_mem[ia_hpsi[tt]]),tile_npack1[tt]));
          //NWPW_GPUBLAS_ERROR(gpublasDgemm(master_handle, matN, matT, tile_npack2[tt],
          //                              ne, nprj, &alpha,
          //                              dev_mem[ib_prj[tt % 2]], tile_npack2[tt],
@@ -1272,11 +1148,11 @@ public:
 
       NWPW_GPU_ERROR(gpuStreamSynchronize(stream[0]));
       NWPW_GPUBLAS_ERROR(gpublasZgemm(master_handle,matN,matN,m,n,k,
-                                    reinterpret_cast<const cuDoubleComplex*>(alpha),
-                                    reinterpret_cast<const cuDoubleComplex*>(dev_mem[ia]),lda,
-                                    reinterpret_cast<const cuDoubleComplex*>(dev_mem[ib]),ldb,
-                                    reinterpret_cast<const cuDoubleComplex*>(beta),
-                                    reinterpret_cast<cuDoubleComplex*>(dev_mem[ic]),ldc));
+                                    reinterpret_cast<const gpuDoubleComplex*>(alpha),
+                                    reinterpret_cast<const gpuDoubleComplex*>(dev_mem[ia]),lda,
+                                    reinterpret_cast<const gpuDoubleComplex*>(dev_mem[ib]),ldb,
+                                    reinterpret_cast<const gpuDoubleComplex*>(beta),
+                                    reinterpret_cast<gpuDoubleComplex*>(dev_mem[ic]),ldc));
       NWPW_GPUBLAS_ERROR(gpublasGetMatrixAsync(2*ldc,n,sizeof(double),dev_mem[ic],2*ldc,host_c,2*ldc,stream[0]));
       NWPW_GPU_ERROR(gpuStreamSynchronize(stream[0]));
 
@@ -1310,11 +1186,11 @@ public:
 
       NWPW_GPU_ERROR(gpuStreamSynchronize(stream[0]));
       NWPW_GPUBLAS_ERROR(gpublasZgemm(master_handle,matC,matN,m,n,k,
-                                    reinterpret_cast<const cuDoubleComplex*>(alpha),
-                                    reinterpret_cast<const cuDoubleComplex*>(dev_mem[ia]),lda,
-                                    reinterpret_cast<const cuDoubleComplex*>(dev_mem[ib]),ldb,
-                                    reinterpret_cast<const cuDoubleComplex*>(beta),
-                                    reinterpret_cast<cuDoubleComplex*>(dev_mem[ic]),ldc));
+                                    reinterpret_cast<const gpuDoubleComplex*>(alpha),
+                                    reinterpret_cast<const gpuDoubleComplex*>(dev_mem[ia]),lda,
+                                    reinterpret_cast<const gpuDoubleComplex*>(dev_mem[ib]),ldb,
+                                    reinterpret_cast<const gpuDoubleComplex*>(beta),
+                                    reinterpret_cast<gpuDoubleComplex*>(dev_mem[ic]),ldc));
       NWPW_GPUBLAS_ERROR(gpublasGetMatrixAsync(2*ldc,n,sizeof(double),dev_mem[ic],2*ldc,host_c,2*ldc,stream[0]));
       NWPW_GPU_ERROR(gpuStreamSynchronize(stream[0]));
 
@@ -1348,11 +1224,11 @@ public:
 
       NWPW_GPU_ERROR(gpuStreamSynchronize(stream[0]));
       NWPW_GPUBLAS_ERROR(gpublasZgemm(master_handle,matN,matC,m,n,k,
-                                    reinterpret_cast<const cuDoubleComplex*>(alpha),
-                                    reinterpret_cast<const cuDoubleComplex*>(dev_mem[ia]),lda,
-                                    reinterpret_cast<const cuDoubleComplex*>(dev_mem[ib]),ldb,
-                                    reinterpret_cast<const cuDoubleComplex*>(beta),
-                                    reinterpret_cast<cuDoubleComplex*>(dev_mem[ic]),ldc));
+                                    reinterpret_cast<const gpuDoubleComplex*>(alpha),
+                                    reinterpret_cast<const gpuDoubleComplex*>(dev_mem[ia]),lda,
+                                    reinterpret_cast<const gpuDoubleComplex*>(dev_mem[ib]),ldb,
+                                    reinterpret_cast<const gpuDoubleComplex*>(beta),
+                                    reinterpret_cast<gpuDoubleComplex*>(dev_mem[ic]),ldc));
       NWPW_GPUBLAS_ERROR(gpublasGetMatrixAsync(2*ldc,n,sizeof(double),dev_mem[ic],2*ldc,host_c,2*ldc,stream[0]));
       NWPW_GPU_ERROR(gpuStreamSynchronize(stream[0]));
 
@@ -1414,11 +1290,11 @@ public:
                      host_cbb + mshift1, k);
          */
          NWPW_GPUBLAS_ERROR(gpublasZgemm(master_handle,matC,matN,k,one,npack,
-                                       reinterpret_cast<const cuDoubleComplex*>(alpha),
-                                       reinterpret_cast<const cuDoubleComplex*>(dev_mem[ia]),npack1_max,
-                                       reinterpret_cast<const cuDoubleComplex*>(dev_mem[ia]+shift1),npack1_max,
-                                       reinterpret_cast<const cuDoubleComplex*>(beta),
-                                       reinterpret_cast<cuDoubleComplex*>(dev_mem[icaa]+mshift1),k));
+                                       reinterpret_cast<const gpuDoubleComplex*>(alpha),
+                                       reinterpret_cast<const gpuDoubleComplex*>(dev_mem[ia]),npack1_max,
+                                       reinterpret_cast<const gpuDoubleComplex*>(dev_mem[ia]+shift1),npack1_max,
+                                       reinterpret_cast<const gpuDoubleComplex*>(beta),
+                                       reinterpret_cast<gpuDoubleComplex*>(dev_mem[icaa]+mshift1),k));
          shift1 += 2*npack1_max;
          mshift1 += 2*ne;
       }
@@ -1429,17 +1305,17 @@ public:
       for (auto k=1; k<=ne; ++k)
       {
          NWPW_GPUBLAS_ERROR(gpublasZgemm(master_handle,matC,matN,k,one,npack,
-                                       reinterpret_cast<const cuDoubleComplex*>(alpha),
-                                       reinterpret_cast<const cuDoubleComplex*>(dev_mem[ia]),npack1_max,
-                                       reinterpret_cast<const cuDoubleComplex*>(dev_mem[ib]+shift1),npack1_max,
-                                       reinterpret_cast<const cuDoubleComplex*>(beta),
-                                       reinterpret_cast<cuDoubleComplex*>(dev_mem[icab]+mshift1),k));
+                                       reinterpret_cast<const gpuDoubleComplex*>(alpha),
+                                       reinterpret_cast<const gpuDoubleComplex*>(dev_mem[ia]),npack1_max,
+                                       reinterpret_cast<const gpuDoubleComplex*>(dev_mem[ib]+shift1),npack1_max,
+                                       reinterpret_cast<const gpuDoubleComplex*>(beta),
+                                       reinterpret_cast<gpuDoubleComplex*>(dev_mem[icab]+mshift1),k));
          NWPW_GPUBLAS_ERROR(gpublasZgemm(master_handle,matC,matN,k,one,npack,
-                                       reinterpret_cast<const cuDoubleComplex*>(alpha),
-                                       reinterpret_cast<const cuDoubleComplex*>(dev_mem[ib]),npack1_max,
-                                       reinterpret_cast<const cuDoubleComplex*>(dev_mem[ib]+shift1),npack1_max,
-                                       reinterpret_cast<const cuDoubleComplex*>(beta),
-                                       reinterpret_cast<cuDoubleComplex*>(dev_mem[icbb]+mshift1),k));
+                                       reinterpret_cast<const gpuDoubleComplex*>(alpha),
+                                       reinterpret_cast<const gpuDoubleComplex*>(dev_mem[ib]),npack1_max,
+                                       reinterpret_cast<const gpuDoubleComplex*>(dev_mem[ib]+shift1),npack1_max,
+                                       reinterpret_cast<const gpuDoubleComplex*>(beta),
+                                       reinterpret_cast<gpuDoubleComplex*>(dev_mem[icbb]+mshift1),k));
 
          shift1 += 2*npack1_max;
          mshift1 += 2*ne;
@@ -1515,11 +1391,11 @@ public:
                      host_cbb + mshift1, k);
          */
          NWPW_GPUBLAS_ERROR(gpublasZgemm(master_handle,matC,matN,k,one,npack,
-                                       reinterpret_cast<const cuDoubleComplex*>(alpha),
-                                       reinterpret_cast<const cuDoubleComplex*>(dev_mem[ia]),npack1_max,
-                                       reinterpret_cast<const cuDoubleComplex*>(dev_mem[ia]+shift1),npack1_max,
-                                       reinterpret_cast<const cuDoubleComplex*>(beta),
-                                       reinterpret_cast<cuDoubleComplex*>(dev_mem[icaa]+mshift1),k));
+                                       reinterpret_cast<const gpuDoubleComplex*>(alpha),
+                                       reinterpret_cast<const gpuDoubleComplex*>(dev_mem[ia]),npack1_max,
+                                       reinterpret_cast<const gpuDoubleComplex*>(dev_mem[ia]+shift1),npack1_max,
+                                       reinterpret_cast<const gpuDoubleComplex*>(beta),
+                                       reinterpret_cast<gpuDoubleComplex*>(dev_mem[icaa]+mshift1),k));
          shift1 += 2*npack1_max;
          mshift1 += 2*ne;
       }
@@ -1531,23 +1407,23 @@ public:
       for (auto k=1; k<=ne; ++k)
       {
          NWPW_GPUBLAS_ERROR(gpublasZgemm(master_handle,matC,matN,k,one,npack,
-                                       reinterpret_cast<const cuDoubleComplex*>(alpha),
-                                       reinterpret_cast<const cuDoubleComplex*>(dev_mem[ia]),npack1_max,
-                                       reinterpret_cast<const cuDoubleComplex*>(dev_mem[ib]+shift1),npack1_max,
-                                       reinterpret_cast<const cuDoubleComplex*>(beta),
-                                       reinterpret_cast<cuDoubleComplex*>(dev_mem[icab]+mshift1),k));
+                                       reinterpret_cast<const gpuDoubleComplex*>(alpha),
+                                       reinterpret_cast<const gpuDoubleComplex*>(dev_mem[ia]),npack1_max,
+                                       reinterpret_cast<const gpuDoubleComplex*>(dev_mem[ib]+shift1),npack1_max,
+                                       reinterpret_cast<const gpuDoubleComplex*>(beta),
+                                       reinterpret_cast<gpuDoubleComplex*>(dev_mem[icab]+mshift1),k));
          NWPW_GPUBLAS_ERROR(gpublasZgemm(master_handle,matC,matN,k,one,npack,
-                                       reinterpret_cast<const cuDoubleComplex*>(alpha),
-                                       reinterpret_cast<const cuDoubleComplex*>(dev_mem[ib]),npack1_max,
-                                       reinterpret_cast<const cuDoubleComplex*>(dev_mem[ia]+shift1),npack1_max,
-                                       reinterpret_cast<const cuDoubleComplex*>(beta),
-                                       reinterpret_cast<cuDoubleComplex*>(dev_mem[icba]+mshift1),k));
+                                       reinterpret_cast<const gpuDoubleComplex*>(alpha),
+                                       reinterpret_cast<const gpuDoubleComplex*>(dev_mem[ib]),npack1_max,
+                                       reinterpret_cast<const gpuDoubleComplex*>(dev_mem[ia]+shift1),npack1_max,
+                                       reinterpret_cast<const gpuDoubleComplex*>(beta),
+                                       reinterpret_cast<gpuDoubleComplex*>(dev_mem[icba]+mshift1),k));
          NWPW_GPUBLAS_ERROR(gpublasZgemm(master_handle,matC,matN,k,one,npack,
-                                       reinterpret_cast<const cuDoubleComplex*>(alpha),
-                                       reinterpret_cast<const cuDoubleComplex*>(dev_mem[ib]),npack1_max,
-                                       reinterpret_cast<const cuDoubleComplex*>(dev_mem[ib]+shift1),npack1_max,
-                                       reinterpret_cast<const cuDoubleComplex*>(beta),
-                                       reinterpret_cast<cuDoubleComplex*>(dev_mem[icbb]+mshift1),k));
+                                       reinterpret_cast<const gpuDoubleComplex*>(alpha),
+                                       reinterpret_cast<const gpuDoubleComplex*>(dev_mem[ib]),npack1_max,
+                                       reinterpret_cast<const gpuDoubleComplex*>(dev_mem[ib]+shift1),npack1_max,
+                                       reinterpret_cast<const gpuDoubleComplex*>(beta),
+                                       reinterpret_cast<gpuDoubleComplex*>(dev_mem[icbb]+mshift1),k));
          shift1 += 2*npack1_max;
          mshift1 += 2*ne;
       }
@@ -1709,11 +1585,11 @@ public:
     //ZGEMM_PWDFT((char *)"N", (char *)"N", ne, ne, ne, rone, host_s21, ne,
     //            host_sa0, ne, rone, host_sa1, ne);
     NWPW_GPUBLAS_ERROR(gpublasZgemm(master_handle,matN,matN,ne,ne,ne,
-                                    reinterpret_cast<const cuDoubleComplex*>(rone),
-                                    reinterpret_cast<const cuDoubleComplex*>(dev_mem[is21]),ne,
-                                    reinterpret_cast<const cuDoubleComplex*>(dev_mem[isa0]),ne,
-                                    reinterpret_cast<const cuDoubleComplex*>(rone),
-                                    reinterpret_cast<cuDoubleComplex*>(dev_mem[isa1]),ne));
+                                    reinterpret_cast<const gpuDoubleComplex*>(rone),
+                                    reinterpret_cast<const gpuDoubleComplex*>(dev_mem[is21]),ne,
+                                    reinterpret_cast<const gpuDoubleComplex*>(dev_mem[isa0]),ne,
+                                    reinterpret_cast<const gpuDoubleComplex*>(rone),
+                                    reinterpret_cast<gpuDoubleComplex*>(dev_mem[isa1]),ne));
 
     NWPW_GPU_ERROR(gpuStreamSynchronize(stream[1]));
     // www_Multiply2(ms, sa0, s12, 1.0, sa1, 1.0);
@@ -1721,11 +1597,11 @@ public:
     //            host_s12, ne, rone, host_sa1, ne);
 
     NWPW_GPUBLAS_ERROR(gpublasZgemm(master_handle,matN,matN,ne,ne,ne,
-                                    reinterpret_cast<const cuDoubleComplex*>(rone),
-                                    reinterpret_cast<const cuDoubleComplex*>(dev_mem[isa0]),ne,
-                                    reinterpret_cast<const cuDoubleComplex*>(dev_mem[is12]),ne,
-                                    reinterpret_cast<const cuDoubleComplex*>(rone),
-                                    reinterpret_cast<cuDoubleComplex*>(dev_mem[isa1]),ne));
+                                    reinterpret_cast<const gpuDoubleComplex*>(rone),
+                                    reinterpret_cast<const gpuDoubleComplex*>(dev_mem[isa0]),ne,
+                                    reinterpret_cast<const gpuDoubleComplex*>(dev_mem[is12]),ne,
+                                    reinterpret_cast<const gpuDoubleComplex*>(rone),
+                                    reinterpret_cast<gpuDoubleComplex*>(dev_mem[isa1]),ne));
     NWPW_GPU_ERROR(gpuStreamSynchronize(stream[2]));
 
     // www_Multiply3(ms, s11, sa0, 1.0, st1, 0.0);
@@ -1733,21 +1609,21 @@ public:
     //            host_sa0, ne, rzero, host_st1, ne);
 
     NWPW_GPUBLAS_ERROR(gpublasZgemm(master_handle,matN,matN,ne,ne,ne,
-                                    reinterpret_cast<const cuDoubleComplex*>(rone),
-                                    reinterpret_cast<const cuDoubleComplex*>(dev_mem[is11]),ne,
-                                    reinterpret_cast<const cuDoubleComplex*>(dev_mem[isa0]),ne,
-                                    reinterpret_cast<const cuDoubleComplex*>(rzero),
-                                    reinterpret_cast<cuDoubleComplex*>(dev_mem[ist1]),ne));
+                                    reinterpret_cast<const gpuDoubleComplex*>(rone),
+                                    reinterpret_cast<const gpuDoubleComplex*>(dev_mem[is11]),ne,
+                                    reinterpret_cast<const gpuDoubleComplex*>(dev_mem[isa0]),ne,
+                                    reinterpret_cast<const gpuDoubleComplex*>(rzero),
+                                    reinterpret_cast<gpuDoubleComplex*>(dev_mem[ist1]),ne));
 
     // www_Multiply1(ms, sa0, st1, 1.0, sa1, 1.0);
     //ZGEMM_PWDFT((char *)"N", (char *)"N", ne, ne, ne, rone, host_sa0, ne,
     //            host_st1, ne, rone, host_sa1, ne);
     NWPW_GPUBLAS_ERROR(gpublasZgemm(master_handle,matN,matN,ne,ne,ne,
-                                    reinterpret_cast<const cuDoubleComplex*>(rone),
-                                    reinterpret_cast<const cuDoubleComplex*>(dev_mem[isa0]),ne,
-                                    reinterpret_cast<const cuDoubleComplex*>(dev_mem[ist1]),ne,
-                                    reinterpret_cast<const cuDoubleComplex*>(rone),
-                                    reinterpret_cast<cuDoubleComplex*>(dev_mem[isa1]),ne));
+                                    reinterpret_cast<const gpuDoubleComplex*>(rone),
+                                    reinterpret_cast<const gpuDoubleComplex*>(dev_mem[isa0]),ne,
+                                    reinterpret_cast<const gpuDoubleComplex*>(dev_mem[ist1]),ne,
+                                    reinterpret_cast<const gpuDoubleComplex*>(rone),
+                                    reinterpret_cast<gpuDoubleComplex*>(dev_mem[isa1]),ne));
 
     NWPW_GPUBLAS_ERROR(gpublasGetMatrixAsync(2*ne,ne,sizeof(double),dev_mem[ist1],2*ne,host_st1,2*ne,stream[0]));
     NWPW_GPUBLAS_ERROR(gpublasGetMatrixAsync(2*ne,ne,sizeof(double),dev_mem[isa1],2*ne,host_sa1,2*ne,stream[0]));
@@ -2074,26 +1950,25 @@ public:
     *          batch_rfftx               *
     *                                    *
     **************************************/
-   void batch_rfftx(const int fft_indx, bool forward, int nx, int nq, int n2ft3d, double *a)
-   {
-      int ia_dev = fetch_dev_mem_indx(((size_t)n2ft3d));
-      NWPW_GPU_ERROR(gpuMemcpy(dev_mem[ia_dev], a, n2ft3d * sizeof(double), gpuMemcpyHostToDevice));
+  void batch_rfftx(const int fft_indx, bool forward, int nx, int nq, int n2ft3d, double *a)
+  {
+    int ia_dev = fetch_dev_mem_indx(((size_t)n2ft3d));
+    NWPW_GPU_ERROR(gpuMemcpy(dev_mem[ia_dev], a, n2ft3d * sizeof(double), gpuMemcpyHostToDevice));
 
-      if (forward) {
-        NWPW_CUFFT_ERROR(cufftExecD2Z(
-            forward_plan_x[fft_indx], reinterpret_cast<cufftDoubleReal *>(dev_mem[ia_dev]),
-            reinterpret_cast<cufftDoubleComplex *>(dev_mem[ia_dev])));
-      } else {
-        NWPW_CUFFT_ERROR(
-            cufftExecZ2D(backward_plan_x[fft_indx],
-                         reinterpret_cast<cufftDoubleComplex *>(dev_mem[ia_dev]),
-                         reinterpret_cast<cufftDoubleReal *>(dev_mem[ia_dev])));
-      }
+    if (forward) {
+      NWPW_GPUFFT_ERROR(gpufftExecD2Z(forward_plan_x[fft_indx],
+				    reinterpret_cast<gpufftDoubleReal *>(dev_mem[ia_dev]),
+				    reinterpret_cast<gpufftDoubleComplex *>(dev_mem[ia_dev])));
+    } else {
+      NWPW_GPUFFT_ERROR(gpufftExecZ2D(backward_plan_x[fft_indx],
+				    reinterpret_cast<gpufftDoubleComplex *>(dev_mem[ia_dev]),
+				    reinterpret_cast<gpufftDoubleReal *>(dev_mem[ia_dev])));
+    }
 
-      NWPW_GPU_ERROR(gpuMemcpy(a, dev_mem[ia_dev], n2ft3d * sizeof(double), gpuMemcpyDeviceToHost));
+    NWPW_GPU_ERROR(gpuMemcpy(a, dev_mem[ia_dev], n2ft3d * sizeof(double), gpuMemcpyDeviceToHost));
 
-      inuse[ia_dev] = false;
-   }
+    inuse[ia_dev] = false;
+  }
 
    /**************************************
     *                                    *
@@ -2115,15 +1990,28 @@ public:
          //NWPW_GPU_ERROR(gpuStreamSynchronize(stream[da]));
          if (forward)
          {
-           NWPW_CUFFT_ERROR(cufftExecD2Z(forward_plan_x[fft_indx],
-                            reinterpret_cast<cufftDoubleReal *> (dev_mem[ia_dev]),
-                            reinterpret_cast<cufftDoubleComplex *> (dev_mem[ia_dev])));
+	   if (NWPW_CUDA) {
+	     NWPW_GPUFFT_ERROR(cufftExecD2Z(forward_plan_x[fft_indx],
+					    reinterpret_cast<gpufftDoubleReal *> (dev_mem[ia_dev]),
+					    reinterpret_cast<gpufftDoubleComplex *> (dev_mem[ia_dev])));
+	   } else if(NWPW_HIP) {
+	     NWPW_ROCFFT_ERROR(rocfft_execute(forward_plan_rx[fft_indx],
+					      reinterpret_cast<void **>(&(dev_mem[ia_dev])), nullptr, nullptr));
+	   } else if(NWPW_SYCL) {
+	     compute_forward(*desc_x[fft_indx], dev_mem[ia_dev]);
+	   }
          }
          else
          {
-            NWPW_CUFFT_ERROR(cufftExecZ2D(backward_plan_x[fft_indx],
-                             reinterpret_cast<cufftDoubleComplex *> (dev_mem[ia_dev]),
-                             reinterpret_cast<cufftDoubleReal *> (dev_mem[ia_dev])));
+	   if (NWPW_CUDA) {
+            NWPW_GPUFFT_ERROR(cufftExecZ2D(backward_plan_x[fft_indx],
+                             reinterpret_cast<gpufftDoubleComplex *> (dev_mem[ia_dev]),
+                             reinterpret_cast<gpufftDoubleReal *> (dev_mem[ia_dev])));
+	   } else if(NWPW_HIP) {
+
+	   } else if(NWPW_SYCL) {
+
+	   }
          }
          NWPW_GPU_ERROR(gpuMemcpyAsync(a,dev_mem[ia_dev],n2ft3d*sizeof(double),gpuMemcpyDeviceToHost,stream[da]));
       }
@@ -2147,15 +2035,15 @@ public:
       NWPW_GPU_ERROR(gpuMemcpy(dev_mem[ia_dev], a, n2ft3d * sizeof(double), gpuMemcpyHostToDevice));
 
       if (forward) {
-        NWPW_CUFFT_ERROR(cufftExecZ2Z(
-            plan_x[fft_indx], reinterpret_cast<cufftDoubleComplex *>(dev_mem[ia_dev]),
-            reinterpret_cast<cufftDoubleComplex *>(dev_mem[ia_dev]),
-            CUFFT_FORWARD));
+        NWPW_GPUFFT_ERROR(gpufftExecZ2Z(
+            plan_x[fft_indx], reinterpret_cast<gpufftDoubleComplex *>(dev_mem[ia_dev]),
+            reinterpret_cast<gpufftDoubleComplex *>(dev_mem[ia_dev]),
+            GPUFFT_FORWARD));
       } else {
-        NWPW_CUFFT_ERROR(cufftExecZ2Z(
-            plan_x[fft_indx], reinterpret_cast<cufftDoubleComplex *>(dev_mem[ia_dev]),
-            reinterpret_cast<cufftDoubleComplex *>(dev_mem[ia_dev]),
-            CUFFT_INVERSE));
+        NWPW_GPUFFT_ERROR(gpufftExecZ2Z(
+            plan_x[fft_indx], reinterpret_cast<gpufftDoubleComplex *>(dev_mem[ia_dev]),
+            reinterpret_cast<gpufftDoubleComplex *>(dev_mem[ia_dev]),
+            GPUFFT_INVERSE));
       }
 
       NWPW_GPU_ERROR(gpuMemcpy(a, dev_mem[ia_dev], n2ft3d * sizeof(double), gpuMemcpyDeviceToHost));
@@ -2183,15 +2071,15 @@ public:
       {
          //NWPW_GPU_ERROR(gpuStreamSynchronize(stream[da]));
          if (forward) {
-           NWPW_CUFFT_ERROR(cufftExecZ2Z(plan_x[fft_indx],
-               reinterpret_cast<cufftDoubleComplex *>(dev_mem[ia_dev]),
-               reinterpret_cast<cufftDoubleComplex *>(dev_mem[ia_dev]),
-               CUFFT_FORWARD));
+           NWPW_GPUFFT_ERROR(gpufftExecZ2Z(plan_x[fft_indx],
+               reinterpret_cast<gpufftDoubleComplex *>(dev_mem[ia_dev]),
+               reinterpret_cast<gpufftDoubleComplex *>(dev_mem[ia_dev]),
+               GPUFFT_FORWARD));
          } else {
-           NWPW_CUFFT_ERROR(cufftExecZ2Z(plan_x[fft_indx],
-               reinterpret_cast<cufftDoubleComplex *>(dev_mem[ia_dev]),
-               reinterpret_cast<cufftDoubleComplex *>(dev_mem[ia_dev]),
-               CUFFT_INVERSE));
+           NWPW_GPUFFT_ERROR(gpufftExecZ2Z(plan_x[fft_indx],
+               reinterpret_cast<gpufftDoubleComplex *>(dev_mem[ia_dev]),
+               reinterpret_cast<gpufftDoubleComplex *>(dev_mem[ia_dev]),
+               GPUFFT_INVERSE));
          }
          NWPW_GPU_ERROR(gpuMemcpyAsync(a,dev_mem[ia_dev],n2ft3d*sizeof(double),gpuMemcpyDeviceToHost,stream[da]));
       }
@@ -2219,15 +2107,15 @@ public:
       NWPW_GPU_ERROR(gpuMemcpy(dev_mem[ia_dev], a, n2ft3d * sizeof(double), gpuMemcpyHostToDevice));
 
       if (forward) {
-        NWPW_CUFFT_ERROR(cufftExecZ2Z(
-            plan_y[fft_indx], reinterpret_cast<cufftDoubleComplex *>(dev_mem[ia_dev]),
-            reinterpret_cast<cufftDoubleComplex *>(dev_mem[ia_dev]),
-            CUFFT_FORWARD));
+        NWPW_GPUFFT_ERROR(gpufftExecZ2Z(
+            plan_y[fft_indx], reinterpret_cast<gpufftDoubleComplex *>(dev_mem[ia_dev]),
+            reinterpret_cast<gpufftDoubleComplex *>(dev_mem[ia_dev]),
+            GPUFFT_FORWARD));
       } else {
-        NWPW_CUFFT_ERROR(cufftExecZ2Z(
-            plan_y[fft_indx], reinterpret_cast<cufftDoubleComplex *>(dev_mem[ia_dev]),
-            reinterpret_cast<cufftDoubleComplex *>(dev_mem[ia_dev]),
-            CUFFT_INVERSE));
+        NWPW_GPUFFT_ERROR(gpufftExecZ2Z(
+            plan_y[fft_indx], reinterpret_cast<gpufftDoubleComplex *>(dev_mem[ia_dev]),
+            reinterpret_cast<gpufftDoubleComplex *>(dev_mem[ia_dev]),
+            GPUFFT_INVERSE));
       }
 
       NWPW_GPU_ERROR(gpuMemcpy(a, dev_mem[ia_dev], n2ft3d * sizeof(double), gpuMemcpyDeviceToHost));
@@ -2254,15 +2142,15 @@ public:
       {
          //NWPW_GPU_ERROR(gpuStreamSynchronize(stream[da]));
          if (forward) {
-           NWPW_CUFFT_ERROR(cufftExecZ2Z(plan_y[fft_indx],
-               reinterpret_cast<cufftDoubleComplex *>(dev_mem[ia_dev]),
-               reinterpret_cast<cufftDoubleComplex *>(dev_mem[ia_dev]),
-               CUFFT_FORWARD));
+           NWPW_GPUFFT_ERROR(gpufftExecZ2Z(plan_y[fft_indx],
+               reinterpret_cast<gpufftDoubleComplex *>(dev_mem[ia_dev]),
+               reinterpret_cast<gpufftDoubleComplex *>(dev_mem[ia_dev]),
+               GPUFFT_FORWARD));
          } else {
-           NWPW_CUFFT_ERROR(cufftExecZ2Z(plan_y[fft_indx],
-               reinterpret_cast<cufftDoubleComplex *>(dev_mem[ia_dev]),
-               reinterpret_cast<cufftDoubleComplex *>(dev_mem[ia_dev]),
-               CUFFT_INVERSE));
+           NWPW_GPUFFT_ERROR(gpufftExecZ2Z(plan_y[fft_indx],
+               reinterpret_cast<gpufftDoubleComplex *>(dev_mem[ia_dev]),
+               reinterpret_cast<gpufftDoubleComplex *>(dev_mem[ia_dev]),
+               GPUFFT_INVERSE));
          }
          NWPW_GPU_ERROR(gpuMemcpyAsync(a,dev_mem[ia_dev],n2ft3d*sizeof(double),gpuMemcpyDeviceToHost,stream[da]));
       }
@@ -2285,15 +2173,15 @@ public:
       gpuMemcpy(dev_mem[ia_dev], a, n2ft3d * sizeof(double), gpuMemcpyHostToDevice);
 
       if (forward) {
-        NWPW_CUFFT_ERROR(cufftExecZ2Z(
-            plan_z[fft_indx], reinterpret_cast<cufftDoubleComplex *>(dev_mem[ia_dev]),
-            reinterpret_cast<cufftDoubleComplex *>(dev_mem[ia_dev]),
-            CUFFT_FORWARD));
+        NWPW_GPUFFT_ERROR(gpufftExecZ2Z(
+            plan_z[fft_indx], reinterpret_cast<gpufftDoubleComplex *>(dev_mem[ia_dev]),
+            reinterpret_cast<gpufftDoubleComplex *>(dev_mem[ia_dev]),
+            GPUFFT_FORWARD));
       } else {
-        NWPW_CUFFT_ERROR(cufftExecZ2Z(
-            plan_z[fft_indx], reinterpret_cast<cufftDoubleComplex *>(dev_mem[ia_dev]),
-            reinterpret_cast<cufftDoubleComplex *>(dev_mem[ia_dev]),
-            CUFFT_INVERSE));
+        NWPW_GPUFFT_ERROR(gpufftExecZ2Z(
+            plan_z[fft_indx], reinterpret_cast<gpufftDoubleComplex *>(dev_mem[ia_dev]),
+            reinterpret_cast<gpufftDoubleComplex *>(dev_mem[ia_dev]),
+            GPUFFT_INVERSE));
       }
 
       gpuMemcpy(a, dev_mem[ia_dev], n2ft3d * sizeof(double), gpuMemcpyDeviceToHost);
@@ -2321,15 +2209,17 @@ public:
       {
          //NWPW_GPU_ERROR(gpuStreamSynchronize(stream[da]));
          if (forward) {
-           NWPW_CUFFT_ERROR(cufftExecZ2Z(
-               plan_z[fft_indx], reinterpret_cast<cufftDoubleComplex *>(dev_mem[ia_dev]),
-               reinterpret_cast<cufftDoubleComplex *>(dev_mem[ia_dev]),
-               CUFFT_FORWARD));
+           NWPW_GPUFFT_ERROR(gpufftExecZ2Z(
+               plan_z[fft_indx],
+	       reinterpret_cast<gpufftDoubleComplex *>(dev_mem[ia_dev]),
+               reinterpret_cast<gpufftDoubleComplex *>(dev_mem[ia_dev]),
+               GPUFFT_FORWARD));
          } else {
-           NWPW_CUFFT_ERROR(cufftExecZ2Z(
-               plan_z[fft_indx], reinterpret_cast<cufftDoubleComplex *>(dev_mem[ia_dev]),
-               reinterpret_cast<cufftDoubleComplex *>(dev_mem[ia_dev]),
-               CUFFT_INVERSE));
+           NWPW_GPUFFT_ERROR(gpufftExecZ2Z(
+               plan_z[fft_indx],
+	       reinterpret_cast<gpufftDoubleComplex *>(dev_mem[ia_dev]),
+               reinterpret_cast<gpufftDoubleComplex *>(dev_mem[ia_dev]),
+               GPUFFT_INVERSE));
          }
          NWPW_GPU_ERROR(gpuMemcpyAsync(a,dev_mem[ia_dev],n2ft3d*sizeof(double),gpuMemcpyDeviceToHost,stream[da]));
       }
@@ -2401,7 +2291,7 @@ public:
             // query working space of syevd
             CUSOLVER_CHECK(cusolverDnDsyevd_bufferSize(cusolverH,jobz,uplo,ne[0],dev_mem[i_a1[0]],ne[0],dev_mem[i_w1[0]],&lwork));
          }
-         NWPW_GPU_ERROR(cudaMalloc(reinterpret_cast<void
+         NWPW_GPU_ERROR(gpuMalloc(reinterpret_cast<void
       **>(&d_work),sizeof(double) * lwork));
 
          shift1 = 0;
@@ -2478,11 +2368,11 @@ public:
       }
    }
 
-   ////////////////////////// special complex-complex fft ////////////////////////////
+  ////////////////////////// special complex-complex fft ////////////////////////////
 
-typedef std::complex<double> complex_t;
+  typedef std::complex<double> complex_t;
 
-   // Define a constants for the radix values
+  // Define a constants for the radix values
 static constexpr int radix_values[] = {17, 16, 11, 9, 8, 7, 6, 5, 4, 3, 2};
 //static constexpr int radix_values[] = {17, 11, 9, 8, 7, 6, 5, 4, 3, 2};
 //static constexpr int radix_values[] = {17, 11, 9, 8, 7, 6, 5, 4, 3, 2};
