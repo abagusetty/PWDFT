@@ -33,8 +33,8 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
 #### DEBUG memory leaks ####
 # Add Address Sanitizer flags for C and C++
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
+#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
+#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
 # Check if the compiler is GNU or Clang
 #if (CMAKE_COMPILER_IS_GNUCC OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 #    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -g")
@@ -129,6 +129,14 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel" OR ${CMAKE_Fortran_COMPILER_ID}
   #set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS} -O3 -m64")
   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS} -O3")
   set(CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS} -O3 -xhost" CACHE STRING "" FORCE)
+
+  #list(APPEND CMAKE_MODULE_PATH "$ENV{MKLROOT}/lib/cmake/mkl")
+  #set(MKL_DIR "$ENV{MKLROOT}/lib/cmake/mkl")
+  find_package(MKL REQUIRED $ENV{MKLROOT}/lib/cmake/mkl)
+  #include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/FindMKL.cmake)
+  include_directories(${MKL_INCLUDE_DIRS})
+  add_definitions(-DNWPW_INTEL_MKL)
+  message("MKL_include: " ${MKL_INCLUDE_DIRS})
 elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU")
    message("-- Using ${CMAKE_Fortran_COMPILER_ID} Fortran Compiler ")
    # adding "-m64 -fdefault-integer-8" below won't work
@@ -205,7 +213,7 @@ elseif(NWPW_CUDA)
    target_include_directories(pwdft PUBLIC ${CUDAToolkit_INCLUDE_DIRS})
    target_link_libraries(pwdft band pspw file nwpwlib ${MPI_LIBRARIES} CUDA::cudart CUDA::cublas CUDA::cusolver CUDA::cufft)
 elseif(NWPW_HIP)
-   target_include_directories(pwdft PUBLIC ${ROCBLAS_INCLUDE_DIRS} ${ROCFFT_INCLUDE_DIRS} ${ROCSOLVER_INCLUDE_DIRS})  
+   target_include_directories(pwdft PUBLIC ${ROCBLAS_INCLUDE_DIRS} ${ROCFFT_INCLUDE_DIRS} ${ROCSOLVER_INCLUDE_DIRS})
    target_link_libraries(pwdft band pspw file nwpwlib ${MPI_LIBRARIES} hip::device)
 elseif(NWPW_SYCL)
    target_include_directories(pwdft PUBLIC $ENV{MKLROOT}/include)

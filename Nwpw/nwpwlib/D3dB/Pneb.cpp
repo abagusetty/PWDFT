@@ -2719,17 +2719,59 @@ void Pneb::g_ortho_excited(double *psi, const int nex[], double *psi_excited)
  * @warning The function prints the values of `n` and `w` to `std::cout` for each iteration, 
  *          which may result in a significant amount of output if `ne[ms]` is large.
  */
-void Pneb::g_project_out_filled(double *psi, const int ms, double *psi_excited) 
+void Pneb::g_project_out_filled(double *psi, const int ms, double *Horb) 
 {
    int ishift = ms*ne[0]*2*PGrid::npack(1);
    for (auto n=0; n<ne[ms]; ++n)
    {
      int indx = 2*PGrid::npack(1)*n + ishift;
-     double w = -PGrid::cc_pack_dot(1, psi+indx, psi_excited);
+     double w = -PGrid::cc_pack_dot(1,psi+indx,Horb);
      //std::cout << "   n=" << n << " w=" << w << std::endl;
-     PGrid::cc_pack_daxpy(1, w, psi+indx, psi_excited);
+     PGrid::cc_pack_daxpy(1,w,psi+indx,Horb);
    }
 }
+
+/**************************************
+ *                                    *
+ *  Pneb::g_project_out_filled_below  *
+ *                                    *
+ **************************************/
+/**
+ * @brief Projects out components below a certain index in the provided psi array.
+ *
+ * This function modifies the Horb array by removing contributions from components 
+ * of the psi array that are indexed below the specified value of `k`. It loops over 
+ * the elements of `psi` from `k-1` down to `0`, computes the dot product of the 
+ * relevant part of `psi` and `Horb`, and applies a scaled update to `Horb` using 
+ * daxpy operations. 
+ *
+ * @param psi  Pointer to an array of doubles, representing the wave function or state vector.
+ * @param ms   Integer index, representing a state or iteration.
+ * @param k    Integer index, specifying the cutoff for the projection.
+ * @param Horb Pointer to an array of doubles, representing orbital data or coefficients to be updated.
+ *
+ * @details 
+ * The function utilizes the PGrid class's `npack`, `cc_pack_dot`, and `cc_pack_daxpy` 
+ * methods to perform packed dot product and daxpy operations efficiently.
+ * 
+ * The `psi` array is accessed via the computed `indx` values, which incorporate 
+ * both the loop index `km` and the `ms` shift.
+ *
+ * @note 
+ * This function assumes that the PGrid class provides methods for handling packed 
+ * grid data and that `ne[0]` is globally accessible within this class or namespace.
+ */
+void Pneb::g_project_out_filled_below(double *psi, const int ms, const int k, double *Horb) 
+{
+   int ishift = ms*ne[0]*2*PGrid::npack(1);
+   for (auto km=k-1; km>=0; --km)
+   {
+     int indx = 2*PGrid::npack(1)*km + ishift;
+     double w = -PGrid::cc_pack_dot(1,psi+indx,Horb);
+     PGrid::cc_pack_daxpy(1,w,psi+indx,Horb);
+   }
+}
+
 
 /*********************************
  *                               *
@@ -2758,14 +2800,14 @@ void Pneb::g_project_out_filled(double *psi, const int ms, double *psi_excited)
  *          for each iteration, which may result in a significant amount of output 
  *          if `k` is large.
  */
-void Pneb::g_project_out_virtual(const int ms, const int nex[], const int k,  double *psiv,  double *psi_excited) 
+void Pneb::g_project_out_virtual(const int ms, const int nex[], const int k,  double *psiv,  double *Horb) 
 {
    int kshift = ms*nex[0]*2*PGrid::npack(1);
    for (auto km=k-1; km>=0; --km)
    {
       int indxkm = 2*PGrid::npack(1)*km + kshift;
-      double wkm = -PGrid::cc_pack_dot(1, psiv+indxkm, psi_excited);
-      PGrid::cc_pack_daxpy(1, wkm, psiv+indxkm, psi_excited);
+      double wkm = -PGrid::cc_pack_dot(1, psiv+indxkm, Horb);
+      PGrid::cc_pack_daxpy(1, wkm, psiv+indxkm, Horb);
       //std::cout << "    - km=" << km << " k=" << k << " wkm=" << wkm <<  std::endl;
    }
 }

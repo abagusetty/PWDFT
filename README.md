@@ -84,16 +84,14 @@ These timings suggest that parallel FFTs should be implemented using hybrid MPI-
 
 # Compiling and Running Instructions
 
-## Build instructions on Sunspot/Aurora
+## Build instructions on ALCF Aurora/Sunspot
 
 ### Required Modules
 
 ```
-module purge
 module restore
 module load cmake
 ```
-
 ### Getting the code and building instructions
 
 ```
@@ -105,53 +103,16 @@ git config --global http.proxy http://proxy.alcf.anl.gov:3128
 git clone https://github.com/ebylaska/PWDFT.git
 
 cd PWDFT
-cmake -H. -Bbuild_sycl -DNWPW_SYCL=On -DCMAKE_C_COMPILER=icx -DCMAKE_Fortran_COMPILER=ifx -DCMAKE_CXX_COMPILER=icpx -DCMAKE_CXX_FLAGS="-fsycl" ./Nwpw
-
-cd build_sycl
-make
+cmake -H. -Bbuild_sycl -DNWPW_SYCL=On -DCMAKE_CXX_COMPILER=icpx -DCMAKE_C_COMPILER=icx -DCMAKE_Fortran_COMPILER=ifx ./Nwpw
 ```
-
 ### Running
 ```
-qsub -l select=1 -l walltime=30:00 -A Aurora_deployment -q debug -I
-qsub -l select=1 -l walltime=30:00 -A catalysis_aesp_CNDA -q workq -I
+qsub -l select=1 -l walltime=30:00 -A catalysis_aesp_CNDA -q lustre_scaling -I
 ```
-```
-qsub -l select=1 -l walltime=30:00 -A catalysis_aesp_CNDA -q debug -I
-```
-```
-mpiexec -n 4 --ppn 4  --env OMP_NUM_THREADS=1 gpu_tile_compact.sh ../../build_sycl/pwdft bandss222b.nw
-```
-
 ```
 export MPIR_CVAR_ENABLE_GPU=0
+export OMP_NUM_THREADS=1
 mpiexec -n 12 --ppn 12 --cpu-bind list:0-7:8-15:16-23:24-31:32-39:40-47:52-59:60-67:68-75:76-83:84-91:92-99 --mem-bind list:0:0:0:0:0:0:1:1:1:1:1:1 --env OMP_NUM_THREADS=1 gpu_tile_compact.sh ../../build_sycl/pwdft cco-cu_surf30.nw
-```
-```
-mpiexec -n 6 --ppn 6  --env OMP_NUM_THREADS=1 --cpu-bind list:2:10:18:26:34:42 gpu_tile_compact.sh ../../build_sycl/pwdft cco-cu_surf30.nw
-```
-
-## Examples on JSLE -  `SYCL` backend
-## CUDA backend
-### Required Modules
-```
-export MODULEPATH=/soft/modulefiles:/usr/share/Modules/modulefiles:/etc/modulefiles:/usr/share/modulefiles
-module add cmake/3.20.3   cuda/11.6.2    gcc/9.5.0
-module add openmpi/4.1.1-gcc
-```
-
-### Build Instructions (for CUDA backend)
-```
-cd PWDFT
-mkdir build_cuda
-cd build_cuda
-cmake -DNWPW_CUDA=ON ../Nwpw/
-make -j4
-```
-
-### Running on JSLE in V100
-```
-qsub  -I -t 30  -n 1 -q gpu_v100_smx2_debug
 ```
 
 ##  Instructions for OLCF Frontier
