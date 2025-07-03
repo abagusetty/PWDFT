@@ -19,10 +19,13 @@ class Control2 {
 
    std::string myrtdbstring, xcstring;
    double punita[9], ptolerances[3], pscaling[2];
-   double ptime_step, pfake_mass, pks_alpha, pecut, pwcut, prcut;
+   double ptime_step, pfake_mass, pscf_alpha, pscf_beta, pecut, pwcut, prcut;
+   double pkerker_g0,pfractional_kT,pfractional_temperature,pfractional_alpha;
+   double pfractional_gamma,pfractional_alpha_min,pfractional_alpha_max,pfractional_beta,pfractional_rmsd_threshold,pfractional_rmsd_tolerance;
    double pbo_time_step;
    double ptotal_charge;
    double peprecondition, psprecondition;
+   std::vector<double> pfractional_filling;
  
    bool pnolagrange   = false;
    bool puse_grid_cmp = false;
@@ -31,6 +34,14 @@ class Control2 {
  
    bool pdeltae_check = true;
    bool pis_crystal = false;
+
+   bool ptwodfractional = false;
+   bool pfractional = false;
+   bool pfractional_frozen = false;
+   int pfractional_smeartype;
+   int pfractional_orbitals[2];
+   int pks_maxit_orb,pks_maxit_orbs;
+   int pdiis_histories;
  
    int pbo_steps[2], pbo_algorithm;
    int ploop[2], pngrid[3], pnpsp, pncut, pmapping, pmapping1d, ptile_factor;
@@ -138,6 +149,9 @@ class Control2 {
    // Brillouin variables 
    int pnbrillouin=0;
 
+   //scf extra scf
+   bool pscf_extra_rotate = false;
+
 
 public:
    int version = 3;
@@ -178,9 +192,28 @@ public:
    double total_charge() { return ptotal_charge; }
    double Eprecondition() { return peprecondition;}
    double Sprecondition() { return psprecondition;}
+
+   double scf_alpha() { return pscf_alpha; }
+   double scf_beta() { return pscf_beta; }
+   double kerker_g0() { return pkerker_g0; }
+   double fractional_kT() { return pfractional_kT; }
+   double fractional_temperature() { return pfractional_temperature; }
+   double fractional_alpha() { return pfractional_alpha; }
+   double fractional_alpha_min() { return pfractional_alpha_min; }
+   double fractional_alpha_max() { return pfractional_alpha_max; }
+   double fractional_beta() { return pfractional_beta; }
+   double fractional_gamma() { return pfractional_gamma; }
+   double fractional_rmsd_threshold() { return pfractional_rmsd_threshold; }
+   double fractional_rmsd_tolerance() { return pfractional_rmsd_tolerance; }
  
    int minimizer() { return pminimizer; }
    int lmbfgs_size() { return plmbfgs_size; }
+   int ks_algorithm() { return pks_algorithm; }
+   int scf_algorithm() { return pscf_algorithm; }
+   int fractional_smeartype() { return pfractional_smeartype; }
+   int ks_maxit_orb() { return pks_maxit_orb; }
+   int ks_maxit_orbs() { return pks_maxit_orbs; }
+   int diis_histories() { return pdiis_histories; }
    int task() { return ptask; }
    int np_orbital() { return pnp_dimensions[1]; }
    int np_dimensions(const int i) { return pnp_dimensions[i]; }
@@ -205,6 +238,12 @@ public:
    int initial_psi_random_algorithm() { return pinitial_psi_random_algorithm; }
    int io_norbs_max() { return pio_norbs_max; }
    bool io_buffer() { return pio_buffer; }
+   bool twodfractional() { return ptwodfractional; }
+   bool fractional() { return pfractional; }
+   bool fractional_frozen() { return pfractional_frozen; }
+   int  fractional_orbitals(const int i) { return pfractional_orbitals[i]; }
+
+   bool scf_extra_rotate() { return pscf_extra_rotate; }
  
    int *ne_ptr() { return pne; }
 
@@ -527,6 +566,13 @@ public:
    std::vector<int> indx_bondings(const int);
    double Kspring0_bondings(const int);
    double gamma0_bondings(const int);
+
+   // smear
+   std::vector<double> fractional_filling() {return pfractional_filling;}
+
+   // remove virtual from rtdbstring
+   //void remove_virtual(){
+  // }
 
 };
 

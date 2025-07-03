@@ -29,6 +29,12 @@ void gdevice2::TN3_dgemm(int npack, int ne, double alpha, double *a, double *b,
   mygdevice2->TN3_dgemm(npack, ne, alpha, a, b, beta, caa, cab, cbb);
 }
 
+void gdevice2::TN3_FullCab_dgemm(int npack, int ne, double alpha, double *a, double *b,
+                         double beta, double *caa, double *cab, double *cbb) {
+   mygdevice2->TN3_FullCab_dgemm(npack, ne, alpha, a, b, beta, caa, cab, cbb);
+}
+
+
 void gdevice2::TN1_dgemm(int npack, int ne, double alpha, double *a, double *b,
                          double beta, double *c) {
   mygdevice2->TN1_dgemm(npack, ne, alpha, a, b, beta, c);
@@ -77,9 +83,13 @@ void gdevice2::NN_eigensolver(int ispin, int ne[], double *a, double *w) {
   mygdevice2->NN_eigensolver(ispin, ne, a, w);
 }
 
-void gdevice2::NN1_zgemm(int npack1_max, int npack, int ne, double *alpha,
-                         double *a, double *b, double *beta, double *c) {
-  mygdevice2->NN1_zgemm(npack1_max, npack, ne, alpha, a, b, beta, c);
+void gdevice2::NN_eigensolver0(int n, double *a, double *w) {
+   mygdevice2->NN_eigensolver0(n, a, w);
+}
+
+void gdevice2::NN1_zgemm(int npack1_max, int npack, int ne, double *alpha, double *a, double *b,
+                         double *beta, double *c) {
+   mygdevice2->NN1_zgemm(npack1_max, npack, ne, alpha, a, b, beta, c);
 }
 
 void gdevice2::CN1_zgemm(int npack1_max, int npack, int ne, double *alpha,
