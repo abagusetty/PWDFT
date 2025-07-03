@@ -184,6 +184,8 @@ public:
 #define gpublasOperation_t cublasOperation_t
 #define gpublasSetMatrixAsync cublasSetMatrixAsync
 #define gpublasGetMatrixAsync cublasGetMatrixAsync
+#define gpublasSetMatrix cublasSetMatrix
+#define gpublasGetMatrix cublasGetMatrix
 #define GPUBLAS_OP_C CUBLAS_OP_C
 #define GPUBLAS_OP_T CUBLAS_OP_T
 #define GPUBLAS_OP_N CUBLAS_OP_N
@@ -195,6 +197,7 @@ public:
 #define GPUBLAS_FILL_MODE_UPPER CUBLAS_FILL_MODE_UPPER
 #define gpusolverStatus_t cusolverStatus_t
 #define GPUSOLVER_STATUS_SUCCESS CUSOLVER_STATUS_SUCCESS
+// #define gpusolverEigMode_t cusolverEigMode_t
 #define gpusolverDnHandle_t cusolverDnHandle_t
 #define gpusolverDnCreate cusolverDnCreate
 #define gpusolverDnDestroy cusolverDnDestroy
@@ -213,9 +216,9 @@ public:
 
 #include <hip/hip_runtime.h>
 #include <hip/hip_runtime_api.h>
+#include <hipsolver/hipsolver.h>
 #include <rocblas/rocblas.h>
 #include <rocfft/rocfft.h>
-#include <rocsolver/rocsolver.h>
 
 class hip_exception : public std::exception {
 
@@ -383,6 +386,8 @@ public:
 #define gpublasOperation_t rocblas_operation
 #define gpublasSetMatrixAsync rocblas_set_matrix_async
 #define gpublasGetMatrixAsync rocblas_get_matrix_async
+#define gpublasSetMatrix rocblas_set_matrix
+#define gpublasGetMatrix rocblas_get_matrix
 #define gpublasDgemm rocblas_dgemm
 #define gpublasZgemm rocblas_zgemm
 #define GPUBLAS_OP_C rocblas_operation_conjugate_transpose
@@ -394,12 +399,13 @@ public:
 #define GPUBLAS_SIDE_RIGHT rocblas_side_right
 #define GPUBLAS_FILL_MODE_LOWER rocblas_fill_lower
 #define GPUBLAS_FILL_MODE_UPPER rocblas_fill_upper
-#define gpusolverStatus_t rocsolver_status
-#define GPUSOLVER_STATUS_SUCCESS rocblas_status_success
-#define gpusolverDnHandle_t rocsolver_handle
-#define gpusolverDnCreate rocsolver_create_handle
-#define gpusolverDnDestroy rocsolver_destroy_handle
-#define gpusolverDnSetStream rocsolver_set_stream
+#define gpusolverStatus_t hipsolverStatus_t
+#define GPUSOLVER_STATUS_SUCCESS HIPSOLVER_STATUS_SUCCESS
+// #define gpusolverEigMode_t hipsolverEigMode_t
+#define gpusolverDnHandle_t hipsolverDnHandle_t
+#define gpusolverDnCreate hipsolverDnCreate
+#define gpusolverDnDestroy hipsolverDnDestroy
+#define gpusolverDnSetStream hipsolverDnSetStream
 #define gpublasDscal rocblasDscal
 #define gpublasZscal rocblasZscal
 #define gpublasDaxpy rocblasDaxpy
@@ -432,8 +438,8 @@ static inline double atomicAdd(double *addr, const double val) {
       .fetch_add(val);
 }
 //#define atomicAdd(addr,val) sycl::atomic_ref<double,
-//sycl::memory_order::relaxed, sycl::memory_scope::device,
-//sycl::access::address_space::global_space>(*addr).fetch_add( val )
+// sycl::memory_order::relaxed, sycl::memory_scope::device,
+// sycl::access::address_space::global_space>(*addr).fetch_add( val )
 #define atomicSub(addr, val)                                                   \
   sycl::atomic_ref<int, sycl::memory_order::relaxed,                           \
                    sycl::memory_scope::device,                                 \
@@ -510,8 +516,7 @@ static inline void gpuStreamCreate(sycl::queue **syclStream) {
   (*syclStream) = new sycl::queue(
       sycl_get_queue()->get_context(), sycl_get_queue()->get_device(),
       asyncHandler,
-      sycl::property_list{sycl::property::queue::enable_profiling{},
-                          sycl::property::queue::in_order{}});
+      sycl::property_list{sycl::property::queue::in_order{}});
 }
 static inline void gpuStreamDestroy(sycl::queue *stream) {
   stream->wait();
@@ -546,10 +551,10 @@ static inline void gpuEventElapsedTime(float *ms, sycl::event *startEvent,
 using gpuStream_t = sycl::queue *;
 using gpublasHandle_t = sycl::queue *;
 using gpuEvent_t = sycl::event *;
-using gpublasOperation_t = oneapi::mkl::tranpose;
+using gpublasOperation_t = oneapi::mkl::transpose;
 
-#define GPUBLAS_OP_T oneapi::mkl::transpose::C
-#define GPUBLAS_OP_N oneapi::mkl::transpose::T
+#define GPUBLAS_OP_C oneapi::mkl::transpose::C
+#define GPUBLAS_OP_T oneapi::mkl::transpose::T
 #define GPUBLAS_OP_N oneapi::mkl::transpose::N
 #define GPUBLAS_DIAG_UNIT oneapi::mkl::diag::U
 #define GPUBLAS_DIAG_NON_UNIT oneapi::mkl::diag::N
@@ -570,50 +575,80 @@ static inline void gpublasDgemm(gpublasHandle_t handle,
                                 double *C, int ldc) {
   const double alpha_val = *alpha;
   const double beta_val = *beta;
-  oneapi::mkl::blas::column_major::gemm(handle, transa, transb, m, n, k, alpha_val,
-					A, lda, B, ldb, beta_val, C, ldc);
+  oneapi::mkl::blas::column_major::gemm(*handle, transa, transb, m, n, k,
+                                        alpha_val, A, lda, B, ldb, beta_val, C,
+                                        ldc);
 }
-static inline void gpublasZgemm(gpublasHandle_t handle,
-                                gpublasOperation_t transa,
-                                gpublasOperation_t transb, int m, int n, int k,
-				const gpuDoubleComplex *alpha,
-				const gpuDoubleComplex *A, int lda,
-				const gpuDoubleComplex *B, int ldb,
-				const gpuDoubleComplex *beta,
-				gpuDoubleComplex *C, int ldc) {
+static inline void
+gpublasZgemm(gpublasHandle_t handle, gpublasOperation_t transa,
+             gpublasOperation_t transb, int m, int n, int k,
+             const gpuDoubleComplex *alpha, const gpuDoubleComplex *A, int lda,
+             const gpuDoubleComplex *B, int ldb, const gpuDoubleComplex *beta,
+             gpuDoubleComplex *C, int ldc) {
   const gpuDoubleComplex alpha_val = *alpha;
   const gpuDoubleComplex beta_val = *beta;
-  oneapi::mkl::blas::column_major::gemm(handle, transa, transb, m, n, k, alpha_val,
-					A, lda, B, ldb, beta_val, C, ldc);
+  oneapi::mkl::blas::column_major::gemm(*handle, transa, transb, m, n, k,
+                                        alpha_val, A, lda, B, ldb, beta_val, C,
+                                        ldc);
 }
 
 namespace detail {
-  static inline void gpublasMatrixAsync(int rows, int cols, size_t elem_size,
-					const void *from_ptr, int from_ld, void *to_ptr,
-					int to_ld, sycl::queue *que) {
-    if (to_ptr == from_ptr && to_ld == from_ld) {
-      return;
-    }
- 
-    if (to_ld == from_ld) {
-      size_t copy_size = elem_size * ((cols - 1) * (size_t)to_ld + rows);
-      que->memcpy(to_ptr, from_ptr, copy_size);
-    } else {
-      gpuMemcpy2DAsync(to_ptr, elem_size * to_ld, from_ptr, elem_size * from_ld,
-		       elem_size * rows, cols, 0, que);
-    }
-  }  
+static inline void gpublasMatrixAsync(int rows, int cols, size_t elem_size,
+                                      const void *from_ptr, int from_ld,
+                                      void *to_ptr, int to_ld,
+                                      sycl::queue *que) {
+  if (to_ptr == from_ptr && to_ld == from_ld) {
+    return;
+  }
+
+  if (to_ld == from_ld) {
+    size_t copy_size = elem_size * ((cols - 1) * (size_t)to_ld + rows);
+    que->memcpy(to_ptr, from_ptr, copy_size);
+  } else {
+    gpuMemcpy2DAsync(to_ptr, elem_size * to_ld, from_ptr, elem_size * from_ld,
+                     elem_size * rows, cols, 0, que);
+  }
 }
+} // namespace detail
 static inline void gpublasSetMatrixAsync(int rows, int cols, size_t elem_size,
-					 const void *from_ptr, int from_ld, void *to_ptr,
-					 int to_ld, sycl::queue *que) {
-  detail::gpublasMatrixAsync(rows, cols, elem_size, from_ptr, from_ld, to_ptr, to_ld, que);
+                                         const void *from_ptr, int from_ld,
+                                         void *to_ptr, int to_ld,
+                                         sycl::queue *que) {
+  detail::gpublasMatrixAsync(rows, cols, elem_size, from_ptr, from_ld, to_ptr,
+                             to_ld, que);
 }
 
 static inline void gpublasGetMatrixAsync(int rows, int cols, size_t elem_size,
-					 const void *from_ptr, int from_ld, void *to_ptr,
-					 int to_ld, sycl::queue *que) {
-  detail::gpublasMatrixAsync(rows, cols, elem_size, from_ptr, from_ld, to_ptr, to_ld, que);}
+                                         const void *from_ptr, int from_ld,
+                                         void *to_ptr, int to_ld,
+                                         sycl::queue *que) {
+  detail::gpublasMatrixAsync(rows, cols, elem_size, from_ptr, from_ld, to_ptr,
+                             to_ld, que);
+}
+static inline void gpublasSetMatrix(int rows, int cols, size_t elem_size,
+                                    const void *from_ptr, int from_ld,
+                                    void *to_ptr, int to_ld) {
+  detail::gpublasMatrixAsync(rows, cols, elem_size, from_ptr, from_ld, to_ptr,
+                             to_ld, sycl_get_queue());
+}
+
+static inline void gpublasGetMatrix(int rows, int cols, size_t elem_size,
+                                    const void *from_ptr, int from_ld,
+                                    void *to_ptr, int to_ld) {
+  detail::gpublasMatrixAsync(rows, cols, elem_size, from_ptr, from_ld, to_ptr,
+                             to_ld, sycl_get_queue());
+}
+
+// I need to work on these 3 APIs
+static inline void gpublasCreate(gpublasHandle_t *handle) { return; }
+static inline void gpublasDestroy(gpublasHandle_t handle) { return; }
+static inline void gpublasSetStream(gpublasHandle_t handle,
+                                    gpuStream_t stream) {
+  handle = stream;
+}
+
+#define NWPW_GPU_ERROR(CALL)                                                   \
+  { CALL; }
 
 #define NWPW_GPUBLAS_ERROR(CALL)                                               \
   do {                                                                         \
